@@ -1,0 +1,195 @@
+<%+header%>
+<!-- 引入 ECharts -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+<style>
+    .chart-box { background: #fff; padding: 10px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-top: 10px;}
+    .toolbar-container { background: #f8f8f8; padding: 10px; border-radius: 4px; border: 1px solid #ddd; }
+    
+    .btn-group { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .custom-group { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid #eee; padding-top: 10px; }
+    
+    .cbi-button-action { background-color: #0069d6; color: #fff; border: none; padding: 5px 12px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+    .cbi-button-action:hover { background-color: #0050a3; }
+    .cbi-button-neutral { background-color: #f4f4f4; color: #333; border: 1px solid #ccc; padding: 5px 12px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+    .cbi-button-neutral:hover { background-color: #e6e6e6; }
+    .cbi-button-active { background-color: #004d99; color: #fff; border: 1px solid #004d99; }
+
+    input[type="datetime-local"] { padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
+    .status-label { font-size: 12px; color: #666; margin-left: auto; }
+</style>
+
+<h2><%=translate("网络延迟趋势图")%></h2>
+
+<div class="toolbar-container">
+    <!-- 快速切换按钮 -->
+    <div class="btn-group" id="preset-buttons">
+        <button class="cbi-button-neutral" onclick="setRelativeTime(1, this)">1小时</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(3, this)">3小时</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(6, this)">6小时</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(12, this)">12小时</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(24, this)">24小时</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(168, this)">1周</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(720, this)">1月</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(4320, this)">6个月</button>
+        <button class="cbi-button-neutral" onclick="setRelativeTime(8760, this)">1年</button>
+    </div>
+
+    <!-- 自定义时间段 -->
+    <div class="custom-group">
+        <span>自定义范围:</span>
+        <input type="datetime-local" id="start-time">
+        <span> 至 </span>
+        <input type="datetime-local" id="end-time">
+        <button class="cbi-button-action" onclick="setCustomTime()">查询</button>
+        <span class="status-label">状态: <span id="status-text">就绪</span></span>
+    </div>
+</div>
+
+<div id="chart-container" class="chart-box" style="width: 100%; height: 500px;"></div>
+
+<script type="text/javascript">
+    var myChart = echarts.init(document.getElementById('chart-container'));
+    var api_url = '<%=luci.dispatcher.build_url("admin", "services", "httping", "get_data")%>';
+
+    // 更新图表 UI
+    function updateChart(data) {
+        if (!data || data.length === 0) {
+            myChart.clear();
+            myChart.showLoading({ text: '当前时间段无数据', color: '#0069d6', textColor: '#000', maskColor: 'rgba(255, 255, 255, 0.8)' });
+            return;
+        }
+
+        var seriesData = {};
+        var servers = [];
+        
+        // 数据分组
+        data.forEach(function(item) {
+            if (!seriesData[item.server_name]) {
+                seriesData[item.server_name] = [];
+                servers.push(item.server_name);
+            }
+            // 转换时间戳为毫秒
+            seriesData[item.server_name].push([item.timestamp * 1000, item.duration]);
+        });
+
+        // 构建 Series
+        var seriesList = servers.map(function(name) {
+            return {
+                name: name,
+                type: 'line',
+                connectNulls: false, // 断点不连线，表示丢包/超时
+                showSymbol: false,
+                smooth: true,
+                sampling: 'lttb', // 开启降采样，防止大量数据卡顿
+                data: seriesData[name]
+            };
+        });
+
+        var option = {
+            tooltip: { 
+                trigger: 'axis',
+                formatter: function (params) {
+                    var html = params[0].axisValueLabel + '<br/>';
+                    params.forEach(function (item) {
+                        var val = item.value[1];
+                        html += item.marker + item.seriesName + ': ' + (val ? val.toFixed(1) + ' ms' : '超时') + '<br/>';
+                    });
+                    return html;
+                }
+            },
+            legend: { data: servers, bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '10%', top: '5%', containLabel: true },
+            xAxis: { type: 'time', boundaryGap: false },
+            yAxis: { type: 'value', name: '延迟 (ms)', scale: true },
+            dataZoom: [
+                { type: 'inside', start: 0, end: 100 }, 
+                { type: 'slider', start: 0, end: 100 }
+            ],
+            series: seriesList
+        };
+        
+        myChart.hideLoading();
+        myChart.setOption(option, true); // true 表示不合并，重绘
+    }
+
+    // 核心请求函数
+    function fetchData(startTs, endTs) {
+        myChart.showLoading();
+        document.getElementById('status-text').innerText = "加载数据中...";
+        
+        fetch(api_url + '?start=' + startTs + '&end=' + endTs)
+            .then(res => {
+                if (!res.ok) throw new Error("API Error");
+                return res.json();
+            })
+            .then(json => {
+                document.getElementById('status-text').innerText = "更新于 " + new Date().toLocaleTimeString();
+                updateChart(json);
+            })
+            .catch(err => {
+                console.error(err);
+                myChart.hideLoading();
+                document.getElementById('status-text').innerText = "加载失败";
+            });
+    }
+
+    // 逻辑：按相对时间查询 (1小时, 24小时等)
+    function setRelativeTime(hours, btnElement) {
+        // 样式切换
+        var buttons = document.querySelectorAll('#preset-buttons button');
+        buttons.forEach(b => {
+            b.classList.remove('cbi-button-active');
+            b.classList.add('cbi-button-neutral');
+        });
+        if (btnElement) {
+            btnElement.classList.remove('cbi-button-neutral');
+            btnElement.classList.add('cbi-button-active');
+        }
+
+        var end = Math.floor(Date.now() / 1000);
+        var start = end - (hours * 3600);
+        
+        // 更新自定义输入框的值，方便用户查看当前范围
+        document.getElementById('start-time').value = new Date(start * 1000).toISOString().slice(0, 16);
+        document.getElementById('end-time').value = new Date(end * 1000).toISOString().slice(0, 16);
+
+        fetchData(start, end);
+    }
+
+    // 逻辑：按自定义时间查询
+    function setCustomTime() {
+        var startVal = document.getElementById('start-time').value;
+        var endVal = document.getElementById('end-time').value;
+
+        if (!startVal || !endVal) {
+            alert("请完整选择开始时间和结束时间");
+            return;
+        }
+
+        var startTs = Math.floor(new Date(startVal).getTime() / 1000);
+        var endTs = Math.floor(new Date(endVal).getTime() / 1000);
+
+        if (startTs >= endTs) {
+            alert("开始时间必须早于结束时间");
+            return;
+        }
+        
+        // 清除上方按钮的激活状态
+        var buttons = document.querySelectorAll('#preset-buttons button');
+        buttons.forEach(b => b.classList.remove('cbi-button-active'));
+
+        fetchData(startTs, endTs);
+    }
+
+    // 初始化：默认选中第1个按钮(1小时)
+    document.addEventListener('DOMContentLoaded', function() {
+        var firstBtn = document.querySelector('#preset-buttons button');
+        setRelativeTime(1, firstBtn);
+    });
+    
+    // 窗口大小改变时自适应
+    window.addEventListener('resize', myChart.resize);
+</script>
+
+<%+footer%>
