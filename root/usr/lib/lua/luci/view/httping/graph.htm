@@ -542,17 +542,18 @@
                 splitLine: { lineStyle: { color: theme.splitLine } },
                 // 【优化】削峰模式下，强制扩大Y轴范围以平滑曲线
                 min: function(value) {
+                    var finalMin = value.min;
                     if (isClippingMode) {
-                        return Math.max(0, value.min - (value.max - value.min) * 2);
+                        finalMin = Math.max(0, value.min - (value.max - value.min) * 2);
                     }
-                    return value.min;
+                    return Math.floor(finalMin / 10) * 10;
                 },
                 max: function(value) {
+                    var finalMax = value.max;
                     if (isClippingMode) {
-                        var rawMax = value.max + (value.max - value.min) * 2;
-                        return Math.ceil(rawMax / 10) * 10;
+                        finalMax = value.max + (value.max - value.min) * 2;
                     }
-                    return value.max;
+                    return Math.ceil(finalMax / 10) * 10;
                 }
             },
             // 【关键逻辑】应用缩放状态
