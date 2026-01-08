@@ -306,7 +306,7 @@
         }
     }
 
-    function processAndRender(rawData) {
+    function processAndRender(rawData, preserveZoom) {
         cachedData = rawData || [];
 
         var groupedData = {};
@@ -358,7 +358,7 @@
         });
 
         renderFilterChips(serverStats);
-        updateChartDisplay(groupedData, lossData);
+        updateChartDisplay(groupedData, lossData, preserveZoom);
     }
 
     function renderFilterChips(stats) {
@@ -397,20 +397,31 @@
             activeServers.add(name);
             element.classList.add('active');
         }
-        processAndRender(cachedData);
+        processAndRender(cachedData, true);
     }
 
     function toggleClipping() {
         var checkbox = document.getElementById('clip-peaks-check');
         isClippingMode = checkbox.checked;
-        processAndRender(cachedData);
+        processAndRender(cachedData, true);
     }
 
-    function updateChartDisplay(groupedData, lossData) {
+    function updateChartDisplay(groupedData, lossData, preserveZoom) {
         var theme = getChartTheme();
         var seriesList = [];
         var legendData = [];
         var colorIdx = 0;
+
+        var start = 0;
+        var end = 100;
+
+        if (preserveZoom && myChart) {
+            var opts = myChart.getOption();
+            if (opts && opts.dataZoom && opts.dataZoom.length > 0) {
+                start = opts.dataZoom[0].start;
+                end = opts.dataZoom[0].end;
+            }
+        }
 
         var isFilterMode = activeServers.size > 0;
 
@@ -509,8 +520,8 @@
                 splitLine: { lineStyle: { color: theme.splitLine } }
             },
             dataZoom: [
-                { type: 'inside', start: 0, end: 100 },
-                { type: 'slider', start: 0, end: 100, bottom: 25, height: 20 }
+                { type: 'inside', start: start, end: end },
+                { type: 'slider', start: start, end: end, bottom: 25, height: 20 }
             ],
             series: seriesList
         };
@@ -531,7 +542,7 @@
             .then(json => {
                 document.getElementById('status-text').innerText = "更新于 " + new Date().toLocaleTimeString();
                 if (!isSilent) myChart.hideLoading();
-                processAndRender(json);
+                processAndRender(json, isSilent);
             })
             .catch(err => {
                 console.error(err);
