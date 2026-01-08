@@ -1,54 +1,94 @@
-This repository is an OpenWrt LuCI package that provides a simple HTTP latency monitor.
-Use these notes to help implement changes quickly and safely.
+# luci-app-httping
 
-Overview
-- Purpose: a LuCI front-end + background daemon that records HTTP latency to a sqlite DB.
-- Key runtime parts:
-  - Systemd/procd service: `root/etc/init.d/httping` (uses `procd` to respawn the daemon).
-  - Daemon: `root/usr/bin/httping-daemon.sh` — reads UCI config, runs `curl`, writes to sqlite3 DB.
-  - LuCI frontend: `root/usr/lib/lua/luci/controller/httping.lua`, `.../model/cbi/httping/setting.lua`, `.../view/httping/graph.htm`.
-  - Package metadata: `Makefile` describes OpenWrt package layout and dependencies (`curl`, `sqlite3-cli`, LuCI libs).
+`luci-app-httping` 是一个用于 OpenWrt 的网络延迟监控插件。它通过 HTTP/HTTPS 请求探测目标服务器的响应时间，并将数据记录到 SQLite 数据库中，最终通过 ECharts 图表在 LuCI 界面直观展示网络质量趋势。
 
-Important patterns & conventions
-- OpenWrt package layout: files under `root/` map 1:1 to target install locations (e.g. `root/usr/bin/*` => `/usr/bin/`).
-- Configuration: stored in UCI at `/etc/config/httping` (see `root/etc/config/httping`). Use `config_load`, `config_get`, and `config_foreach` in shell code.
-- Daemon behavior:
-  - Runs an infinite loop reading `httping.global.enabled` and iterates `server` sections.
-  - Uses `curl -L -k -s -o /dev/null -w "%{time_namelookup} %{time_total}"` to measure latency and stores durations (ms) into sqlite `monitor_log` table.
-  - Database path is configurable via `httping.global.db_path` (default `/etc/httping_data.db`).
-- LuCI controller `action_get_data` calls `sqlite3 -json <db> "SELECT ..."` and streams JSON to the browser — ensure the build environment provides a `sqlite3` CLI that supports `-json`.
-- Deletion and safety: `setting.lua` escapes single quotes when building sqlite commands. Follow the same escaping pattern when generating SQL from user-supplied names.
+相比传统的 ICMP Ping，使用 HTTP 请求更能反映实际的网络浏览体验，尤其是对于禁止 Ping 的服务器或需要通过代理访问的场景。
 
-Developer workflows
-- Build/package: this is an OpenWrt package. To build it inside an OpenWrt buildroot, add this repo to `package/` (or feeds) and run:
+## 功能特点
 
-```sh
-# from OpenWrt root
+*   **HTTP/HTTPS 测速**：使用 `curl` 进行精确的握手与传输耗时测量。
+*   **多服务器支持**：支持同时监控多个目标地址（如百度、Google、GitHub 等）。
+*   **可视化图表**：集成 ECharts 5.x，提供交互式波形图。
+    *   支持缩放、拖拽查看历史数据。
+    *   支持服务器快速筛选/对比。
+    *   **丢包标记**：请求失败或超时会在图表中显示为红色丢包点。
+    *   **平滑模式**：支持“削峰”功能，过滤异常高延迟噪点。
+    *   **暗黑模式**：自动适配浏览器的深色模式。
+*   **灵活配置**：可自定义检测间隔、数据库存储路径。
+*   **轻量级存储**：使用 SQLite 存储历史数据，支持按需清理。
+
+## 依赖项
+
+本插件依赖以下软件包：
+*   `luci-base`
+*   `luci-lib-jsonc`
+*   `curl` (用于发送 HTTP 请求)
+*   `sqlite3-cli` (用于数据存储)
+
+## 编译与安装
+
+### 1. 准备 OpenWrt SDK 或源码环境
+确保你已经配置好了 OpenWrt 的编译环境。
+
+### 2. 获取源码
+将本仓库克隆到你的 OpenWrt 源码的 `package` 目录下：
+
+```bash
+cd package/
+git clone https://github.com/your-repo/luci-app-httping.git
+```
+*(请将 URL 替换为实际仓库地址)*
+
+### 3. 配置编译菜单
+进入 OpenWrt 源码根目录，运行 menuconfig：
+
+```bash
+make menuconfig
+```
+
+在菜单中找到并选中：
+`LuCI` -> `3. Applications` -> `luci-app-httping`
+
+### 4. 编译
+```bash
 make package/luci-app-httping/compile V=s
 ```
 
-- Install locally for testing on a device: build the package `.ipk` and install with `opkg install`. After install, postinst will `enable` and `start` the service.
-- Run the daemon manually on a test device (safe mode):
+### 5. 安装
+编译完成后，生成的 `.ipk` 文件通常位于 `bin/packages/<arch>/base/` 目录下。上传到路由器并安装：
 
-```sh
-chmod +x /usr/bin/httping-daemon.sh
-/bin/sh /usr/bin/httping-daemon.sh
+```bash
+opkg update
+opkg install luci-app-httping_*.ipk
 ```
 
-Key files to edit for common tasks
-- Add/change UI: edit `root/usr/lib/lua/luci/view/httping/graph.htm` (JS + ECharts rendering). The frontend calls the controller API `get_data`.
-- Change data model or queries: edit `root/usr/lib/lua/luci/controller/httping.lua` (see `action_get_data` and `action_clear_data`).
-- Change UCI form or deletion behavior: edit `root/usr/lib/lua/luci/model/cbi/httping/setting.lua` (note `ts.remove` is overridden to clear DB rows by name).
-- Change background probe logic: edit `root/usr/bin/httping-daemon.sh` (timing, curl options, DB schema).
+## 使用指南
 
-Integration & runtime requirements
-- Requires `curl` and `sqlite3` CLI available on target. The Makefile lists `sqlite3-cli` and `curl` as package dependencies.
-- The controller relies on `sqlite3 -json`. If your target `sqlite3` lacks `-json`, alter `action_get_data` to produce JSON differently (e.g., `sqlite3` + manual serialization or `jq` if available).
-- Uses UCI and LuCI model APIs — test changes on a real OpenWrt device or an accurate emulator.
+安装完成后，刷新 LuCI 界面，你可以在 **“服务” (Services)** -> **“网络延迟监控”** 中找到本插件。
 
-Examples & pitfalls
-- When updating SQL with string values, escape single quotes: `name:gsub("'","''")` (see `setting.lua`).
-- Daemon writes `NULL` duration on curl error — frontend treats `null` as packet loss/timeout.
-- `Makefile` marks `/etc/config/httping` as a `conffiles` entry so upgrades won't overwrite local config.
+### 全局设置
+*   **启用监控**：勾选后后台守护进程将开始运行。
+*   **数据库路径**：默认为 `/etc/httping_data.db`，建议保持默认或修改为挂载的外部存储路径（如 U 盘）以避免写入频繁磨损 Flash。
+*   **管理数据**：点击“清除所有历史数据”可以重置数据库。
 
-If anything here is unclear or you want this file to include additional examples (packaging commands, test steps, or exact sqlite version expectations), tell me what to expand and I'll update it.
+### 服务器节点列表
+在此处添加你需要监控的目标 URL。
+*   **显示名称**：图表中显示的名称（如 "Google"）。
+*   **检测URL**：完整的 HTTP/HTTPS 地址（如 `https://www.google.com`）。
+*   **检测间隔**：建议设置为 60 秒或更长，避免过于频繁的请求。
+
+### 趋势图
+点击顶部的 **“网络延迟趋势图”** 标签页查看实时数据。
+*   顶部按钮可快速切换时间范围（1小时 ~ 1年）。
+*   点击图例或下方的服务器标签可以隐藏/显示特定服务器的曲线。
+*   勾选 **“自动刷新”** 可实时监控网络波动。
+
+## 目录结构说明
+
+*   `/etc/config/httping`: 配置文件。
+*   `/usr/bin/httping-daemon.sh`: 后台监控守护脚本。
+*   `/etc/httping_data.db`: SQLite 数据库文件（默认位置）。
+
+## License
+
+MIT License
