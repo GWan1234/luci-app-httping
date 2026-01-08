@@ -1,189 +1,334 @@
 <%+header%>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 
-<style>
-    .toolbar-container {
-        background: var(--toolbar-bg, #f8f8f8);
-        padding: 15px;
-        border-radius: 6px;
-        border: 1px solid var(--border-color, #ddd);
-        margin-bottom: 20px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        align-items: center;
-        justify-content: space-between;
-    }
+    <style>
+        /* 容器样式 */
+        .toolbar-container {
+            background: var(--toolbar-bg, #f8f8f8);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color, #ddd);
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
 
-    .chart-wrapper {
-        background: var(--chart-bg, #fff);
-        padding: 15px;
-        border-radius: 6px;
-        border: 1px solid var(--border-color, #ddd);
-        margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
+        .chart-wrapper {
+            background: var(--chart-bg, #fff);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color, #ddd);
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            position: relative;
+        }
 
-    .chart-title {
-        font-size: 16px;
-        font-weight: bold;
-        margin-bottom: 10px;
-        padding-left: 5px;
-        border-left: 4px solid #0069d6;
-        color: var(--text-color, #333);
-    }
+        .chart-div {
+            width: 100%;
+            height: 500px;
+        }
 
-    .chart-div {
-        width: 100%;
-        height: 300px;
-    }
+        /* 按钮组与输入框样式 */
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
 
-    .control-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-    }
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
 
-    input[type="datetime-local"] {
-        padding: 5px;
-        border: 1px solid var(--border-color, #ccc);
-        border-radius: 4px;
-        background: var(--input-bg, #fff);
-        color: var(--text-color, #333);
-    }
+        input[type="datetime-local"] {
+            padding: 5px;
+            border: 1px solid var(--border-color, #ccc);
+            border-radius: 4px;
+            background: var(--input-bg, #fff);
+            color: var(--text-color, #333);
+        }
 
-    :root {
-        --toolbar-bg: #f8f8f8;
-        --chart-bg: #fff;
-        --border-color: #ddd;
-        --text-color: #333;
-        --input-bg: #fff;
-    }
+        /* 服务器筛选标签样式 */
+        .server-filter-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
 
-    @media (prefers-color-scheme: dark) {
+        .server-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background: var(--chip-bg, #eee);
+            color: var(--text-color, #333);
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .server-chip.active {
+            background: #0069d6;
+            color: #fff;
+            border-color: #0069d6;
+            box-shadow: 0 2px 4px rgba(0, 105, 214, 0.3);
+        }
+
+        .server-chip:hover {
+            opacity: 0.9;
+        }
+
+        .loss-high {
+            color: #ff4d4f;
+            font-weight: bold;
+            margin-left: 2px;
+        }
+
+        .server-chip.active .loss-high {
+            color: #ffcccc;
+        }
+
+        /* 选中状态下丢包文字颜色 */
+
+        /* 深浅模式 CSS 变量 */
         :root {
-            --toolbar-bg: #2a2a2a;
-            --chart-bg: #333;
-            --border-color: #444;
-            --text-color: #eee;
-            --input-bg: #444;
+            --toolbar-bg: #f8f8f8;
+            --chart-bg: #fff;
+            --border-color: #ddd;
+            --text-color: #333;
+            --input-bg: #fff;
+            --chip-bg: #f0f0f0;
         }
-    }
 
-    .cbi-button-custom {
-        padding: 6px 12px;
-        cursor: pointer;
-        border-radius: 4px;
-        font-size: 13px;
-        border: 1px solid transparent;
-        transition: all 0.2s;
-    }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --toolbar-bg: #2a2a2a;
+                --chart-bg: #333;
+                --border-color: #444;
+                --text-color: #eee;
+                --input-bg: #444;
+                --chip-bg: #444;
+            }
+        }
 
-    .btn-neutral {
-        background: #eee;
-        color: #333;
-    }
+        /* 按钮通用样式 */
+        .cbi-button-custom {
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
 
-    .btn-active {
-        background: #0069d6;
-        color: #fff;
-    }
-
-    @media (prefers-color-scheme: dark) {
         .btn-neutral {
-            background: #444;
-            color: #eee;
-            border-color: #555;
+            background: #eee;
+            color: #333;
         }
-    }
 
-    .status-text {
-        font-size: 12px;
-        color: var(--text-color);
-        opacity: 0.7;
-        margin-left: 10px;
-    }
-</style>
+        .btn-active {
+            background: #0069d6;
+            color: #fff;
+        }
 
-<h2>
-    <%=translate("网络延迟趋势图")%>
-</h2>
+        @media (prefers-color-scheme: dark) {
+            .btn-neutral {
+                background: #444;
+                color: #eee;
+                border-color: #555;
+            }
+        }
 
-<div class="toolbar-container">
-    <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-        <div class="control-group" id="preset-buttons">
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(1, this)">1小时</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(6, this)">6小时</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(24, this)">24小时</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(168, this)">7天</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(720, this)">1月</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(2160, this)">3月</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(4320, this)">6月</button>
-            <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(8760, this)">1年</button>
+        .status-text {
+            font-size: 12px;
+            color: var(--text-color);
+            opacity: 0.7;
+            margin-left: 10px;
+        }
+    </style>
+
+    <h2>
+        <%=translate("网络延迟趋势图")%>
+    </h2>
+
+    <div class="toolbar-container">
+        <!-- 第一行：时间选择 -->
+        <div class="control-row">
+            <div class="control-group" id="preset-buttons">
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(1, this)">1小时</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(6, this)">6小时</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(12, this)">12小时</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(24, this)">24小时</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(168, this)">7天</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(720, this)">1月</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(4320, this)">6月</button>
+                <button class="cbi-button-custom btn-neutral" onclick="setRelativeTime(8760, this)">1年</button>
+            </div>
         </div>
-        <div class="control-group" style="border-top: 1px solid var(--border-color); padding-top: 10px;">
-            <span style="color: var(--text-color); font-size: 13px;">自定义范围:</span>
-            <input type="datetime-local" id="start-time">
-            <span style="color: var(--text-color);">-</span>
-            <input type="datetime-local" id="end-time">
-            <button class="cbi-button-custom btn-active" onclick="setCustomTime()">查询</button>
-            <span class="status-text" id="status-text">就绪</span>
+
+        <!-- 第二行：自定义时间与状态 -->
+        <div class="control-row">
+            <div class="control-group">
+                <span style="color: var(--text-color); font-size: 13px;">自定义范围:</span>
+                <input type="datetime-local" id="start-time">
+                <span style="color: var(--text-color);">-</span>
+                <input type="datetime-local" id="end-time">
+                <button class="cbi-button-custom btn-active" onclick="setCustomTime()">查询</button>
+                <span class="status-text" id="status-text">就绪</span>
+            </div>
+        </div>
+
+        <!-- 第三行：服务器筛选 (带丢包率) -->
+        <div class="server-filter-container" id="server-filters">
+            <span style="color: var(--text-color); font-size: 13px; padding: 6px 0;">服务器筛选:</span>
+            <!-- 动态生成标签 -->
         </div>
     </div>
-</div>
 
-<div id="charts-container"></div>
+    <div class="chart-wrapper">
+        <div id="main-chart" class="chart-div"></div>
+    </div>
 
-<script type="text/javascript">
-    var api_url = '<%=luci.dispatcher.build_url("admin", "services", "httping", "get_data")%>';
-    var chartsInstances = [];
+    <script type="text/javascript">
+        var api_url = '<%=luci.dispatcher.build_url("admin", "services", "httping", "get_data")%>';
+        var myChart = null;
+        var cachedData = []; // 缓存当前时间段的所有数据
+        var activeServers = new Set(); // 存储当前选中的服务器名称
 
-    function isDarkMode() { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
+        // 颜色池，用于区分不同服务器曲线
+        var colorPalette = [
+            '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+        ];
 
-    function getChartTheme() {
-        var isDark = isDarkMode();
-        return {
-            textColor: isDark ? '#eee' : '#333',
-            lineColor: isDark ? '#555' : '#ccc',
-            splitLine: isDark ? '#444' : '#eee',
-            tooltipBg: isDark ? 'rgba(50,50,50,0.9)' : 'rgba(255,255,255,0.9)',
-            seriesColor: '#0069d6'
-        };
-    }
+        function isDarkMode() { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
 
-    function renderCharts(rawData) {
-        var container = document.getElementById('charts-container');
-        container.innerHTML = "";
-        chartsInstances.forEach(c => c.dispose());
-        chartsInstances = [];
-
-        if (!rawData || rawData.length === 0) {
-            container.innerHTML = '<div style="padding:40px; text-align:center; color:gray;">当前时间段暂无数据。</div>';
-            return;
+        function getChartTheme() {
+            var isDark = isDarkMode();
+            return {
+                textColor: isDark ? '#eee' : '#333',
+                lineColor: isDark ? '#555' : '#ccc',
+                splitLine: isDark ? '#444' : '#eee',
+                tooltipBg: isDark ? 'rgba(50,50,50,0.9)' : 'rgba(255,255,255,0.9)'
+            };
         }
 
-        var groupedData = {};
-        rawData.forEach(function (item) {
-            if (!groupedData[item.server_name]) groupedData[item.server_name] = [];
-            groupedData[item.server_name].push([item.timestamp * 1000, item.duration]);
-        });
+        function initChart() {
+            if (myChart != null && myChart != "" && myChart != undefined) {
+                myChart.dispose();
+            }
+            myChart = echarts.init(document.getElementById('main-chart'));
+        }
 
-        var theme = getChartTheme();
-        Object.keys(groupedData).forEach(function (serverName) {
-            var wrapper = document.createElement('div');
-            wrapper.className = 'chart-wrapper';
-            var title = document.createElement('div');
-            title.className = 'chart-title';
-            title.innerText = serverName;
-            var chartDiv = document.createElement('div');
-            chartDiv.className = 'chart-div';
-            wrapper.appendChild(title);
-            wrapper.appendChild(chartDiv);
-            container.appendChild(wrapper);
+        function processAndRender(rawData) {
+            cachedData = rawData || [];
 
-            var myChart = echarts.init(chartDiv);
-            chartsInstances.push(myChart);
+            var groupedData = {};
+            var serverStats = {};
+
+            cachedData.forEach(function (item) {
+                if (!groupedData[item.server_name]) {
+                    groupedData[item.server_name] = [];
+                    serverStats[item.server_name] = { total: 0, loss: 0 };
+                }
+
+                serverStats[item.server_name].total++;
+                if (item.duration === null) {
+                    serverStats[item.server_name].loss++;
+                }
+
+                groupedData[item.server_name].push([item.timestamp * 1000, item.duration]);
+            });
+
+            renderFilterChips(serverStats);
+            updateChartDisplay(groupedData);
+        }
+
+        function renderFilterChips(stats) {
+            var container = document.getElementById('server-filters');
+            var isFirstLoad = activeServers.size === 0;
+
+            container.innerHTML = '<span style="color: var(--text-color); font-size: 13px; padding: 6px 0;">服务器筛选:</span>';
+
+            Object.keys(stats).forEach(function (name) {
+                if (isFirstLoad) activeServers.add(name);
+
+                // 计算丢包率，保留2位小数
+                var total = stats[name].total;
+                var lossRate = total > 0 ? (stats[name].loss / total * 100).toFixed(2) : "0.00";
+
+                var chip = document.createElement('div');
+
+                chip.className = 'server-chip ' + (activeServers.has(name) ? 'active' : '');
+                chip.onclick = function () { toggleServer(name, this); };
+
+                var badgeClass = parseFloat(lossRate) > 0 ? 'loss-high' : '';
+
+                // 格式：服务器节点名称(0.02%)
+                chip.innerHTML = `${name}<span class="${badgeClass}">(${lossRate}%)</span>`;
+
+                container.appendChild(chip);
+            });
+        }
+
+        function toggleServer(name, element) {
+            if (activeServers.has(name)) {
+                if (activeServers.size > 1) {
+                    activeServers.delete(name);
+                    element.classList.remove('active');
+                }
+            } else {
+                activeServers.add(name);
+                element.classList.add('active');
+            }
+
+            var groupedData = {};
+            cachedData.forEach(function (item) {
+                if (!groupedData[item.server_name]) groupedData[item.server_name] = [];
+                groupedData[item.server_name].push([item.timestamp * 1000, item.duration]);
+            });
+            updateChartDisplay(groupedData);
+        }
+
+        function updateChartDisplay(groupedData) {
+            var theme = getChartTheme();
+            var seriesList = [];
+            var legendData = [];
+            var colorIdx = 0;
+
+            Object.keys(groupedData).forEach(function (serverName) {
+                if (!activeServers.has(serverName)) return;
+
+                legendData.push(serverName);
+                seriesList.push({
+                    name: serverName,
+                    type: 'line',
+                    connectNulls: false,
+                    showSymbol: false,
+                    smooth: true,
+                    sampling: 'lttb',
+                    itemStyle: { color: colorPalette[colorIdx % colorPalette.length] },
+                    data: groupedData[serverName]
+                });
+                colorIdx++;
+            });
+
+            if (seriesList.length === 0) {
+                myChart.showLoading({ text: '请至少选择一个服务器', color: '#0069d6', textColor: theme.textColor, maskColor: 'transparent' });
+                return;
+            } else {
+                myChart.hideLoading();
+            }
+
             var option = {
                 backgroundColor: 'transparent',
                 tooltip: {
@@ -191,82 +336,120 @@
                     backgroundColor: theme.tooltipBg,
                     textStyle: { color: theme.textColor },
                     formatter: function (params) {
-                        var val = params[0].value[1];
-                        return params[0].axisValueLabel + '<br/>' +
-                            params[0].marker + (val !== null ? val.toFixed(1) + ' ms' : '超时');
+                        var html = params[0].axisValueLabel + '<br/>';
+                        params.forEach(item => {
+                            var val = item.value[1];
+                            var colorSpan = `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>`;
+                            html += `${colorSpan}${item.seriesName}: ${val !== null ? val.toFixed(1) + ' ms' : '超时'}<br/>`;
+                        });
+                        return html;
                     }
                 },
-                grid: { left: '50', right: '20', top: '10', bottom: '30' },
+                legend: {
+                    data: legendData,
+                    bottom: 0,
+                    textStyle: { color: theme.textColor }
+                },
+                grid: {
+                    left: '10', right: '30', top: '40', bottom: '10%',
+                    containLabel: true
+                },
                 xAxis: {
-                    type: 'time', boundaryGap: false,
+                    type: 'time',
+                    boundaryGap: false,
                     axisLabel: { color: theme.textColor },
                     axisLine: { lineStyle: { color: theme.lineColor } },
                     splitLine: { show: false }
                 },
                 yAxis: {
-                    type: 'value', scale: true,
+                    type: 'value',
+                    scale: true,
                     axisLabel: { color: theme.textColor, formatter: '{value} ms' },
                     splitLine: { lineStyle: { color: theme.splitLine } }
                 },
-                dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', start: 0, end: 100, bottom: 0, height: 20 }],
-                series: [{
-                    name: serverName, type: 'line', connectNulls: false, showSymbol: false, smooth: true, sampling: 'lttb',
-                    itemStyle: { color: theme.seriesColor },
-                    areaStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(0, 105, 214, 0.3)' },
-                            { offset: 1, color: 'rgba(0, 105, 214, 0.01)' }
-                        ])
-                    },
-                    data: groupedData[serverName]
-                }]
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { type: 'slider', start: 0, end: 100, bottom: 25, height: 20 }
+                ],
+                series: seriesList
             };
-            myChart.setOption(option);
+
+            myChart.setOption(option, true);
+        }
+
+        function fetchData(startTs, endTs) {
+            if (!myChart) initChart();
+            myChart.showLoading({ text: '加载数据中...', color: '#0069d6', textColor: getChartTheme().textColor });
+            document.getElementById('status-text').innerText = "加载中...";
+
+            fetch(api_url + '?start=' + startTs + '&end=' + endTs)
+                .then(res => res.json())
+                .then(json => {
+                    document.getElementById('status-text').innerText = "更新于 " + new Date().toLocaleTimeString();
+                    myChart.hideLoading();
+                    processAndRender(json);
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('status-text').innerText = "加载失败";
+                    myChart.hideLoading();
+                });
+        }
+
+        function setRelativeTime(hours, btnElement) {
+            var buttons = document.querySelectorAll('#preset-buttons button');
+            buttons.forEach(b => { b.classList.remove('btn-active'); b.classList.add('btn-neutral'); });
+            if (btnElement) { btnElement.classList.remove('btn-neutral'); btnElement.classList.add('btn-active'); }
+
+            var end = Math.floor(Date.now() / 1000);
+            var start = end - (hours * 3600);
+
+            var toLocalISO = function (ts) {
+                var d = new Date(ts * 1000);
+                var offset = d.getTimezoneOffset() * 60000;
+                return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+            };
+            document.getElementById('start-time').value = toLocalISO(start);
+            document.getElementById('end-time').value = toLocalISO(end);
+
+            fetchData(start, end);
+        }
+
+        function setCustomTime() {
+            var startVal = document.getElementById('start-time').value;
+            var endVal = document.getElementById('end-time').value;
+            if (!startVal || !endVal) { alert("请选择开始和结束时间"); return; }
+            var startTs = Math.floor(new Date(startVal).getTime() / 1000);
+            var endTs = Math.floor(new Date(endVal).getTime() / 1000);
+            if (startTs >= endTs) { alert("开始时间必须早于结束时间"); return; }
+
+            var buttons = document.querySelectorAll('#preset-buttons button');
+            buttons.forEach(b => { b.classList.remove('btn-active'); b.classList.add('btn-neutral'); });
+            fetchData(startTs, endTs);
+        }
+
+        window.matchMedia('(prefers-color-scheme: dark)').addListener(function (e) {
+            if (myChart) {
+                var groupedData = {};
+                cachedData.forEach(function (item) {
+                    if (!groupedData[item.server_name]) groupedData[item.server_name] = [];
+                    groupedData[item.server_name].push([item.timestamp * 1000, item.duration]);
+                });
+                updateChartDisplay(groupedData);
+            }
         });
-    }
 
-    function fetchData(startTs, endTs) {
-        document.getElementById('status-text').innerText = "加载中...";
-        fetch(api_url + '?start=' + startTs + '&end=' + endTs)
-            .then(res => res.json()).then(json => {
-                document.getElementById('status-text').innerText = "更新于 " + new Date().toLocaleTimeString();
-                renderCharts(json);
-            }).catch(err => { console.error(err); document.getElementById('status-text').innerText = "加载失败"; });
-    }
+        document.addEventListener('DOMContentLoaded', function () {
+            initChart();
+            // 默认展示12小时 (第3个按钮，索引2)
+            var buttons = document.querySelectorAll('#preset-buttons button');
+            if (buttons.length > 2) {
+                setRelativeTime(12, buttons[2]);
+            } else {
+                setRelativeTime(1, buttons[0]);
+            }
+        });
 
-    function setRelativeTime(hours, btnElement) {
-        var buttons = document.querySelectorAll('#preset-buttons button');
-        buttons.forEach(b => { b.classList.remove('btn-active'); b.classList.add('btn-neutral'); });
-        if (btnElement) { btnElement.classList.remove('btn-neutral'); btnElement.classList.add('btn-active'); }
-        var end = Math.floor(Date.now() / 1000);
-        var start = end - (hours * 3600);
-        var toLocalISO = function (ts) {
-            var d = new Date(ts * 1000);
-            var offset = d.getTimezoneOffset() * 60000;
-            return new Date(d.getTime() - offset).toISOString().slice(0, 16);
-        };
-        document.getElementById('start-time').value = toLocalISO(start);
-        document.getElementById('end-time').value = toLocalISO(end);
-        fetchData(start, end);
-    }
-
-    function setCustomTime() {
-        var startVal = document.getElementById('start-time').value;
-        var endVal = document.getElementById('end-time').value;
-        if (!startVal || !endVal) { alert("请选择开始和结束时间"); return; }
-        var startTs = Math.floor(new Date(startVal).getTime() / 1000);
-        var endTs = Math.floor(new Date(endVal).getTime() / 1000);
-        if (startTs >= endTs) { alert("开始时间必须早于结束时间"); return; }
-        var buttons = document.querySelectorAll('#preset-buttons button');
-        buttons.forEach(b => { b.classList.remove('btn-active'); b.classList.add('btn-neutral'); });
-        fetchData(startTs, endTs);
-    }
-
-    window.matchMedia('(prefers-color-scheme: dark)').addListener(function (e) { setCustomTime(); });
-    document.addEventListener('DOMContentLoaded', function () {
-        var firstBtn = document.querySelector('#preset-buttons button');
-        setRelativeTime(1, firstBtn);
-    });
-    window.addEventListener('resize', function () { chartsInstances.forEach(c => c.resize()); });
-</script>
-<%+footer%>
+        window.addEventListener('resize', function () { if (myChart) myChart.resize(); });
+    </script>
+    <%+footer%>
