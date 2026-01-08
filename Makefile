@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-httping
-PKG_VERSION:=1.0.10
+PKG_VERSION:=1.0.11
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=No Name
@@ -37,6 +37,7 @@ define Package/luci-app-httping/install
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/httping
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/httping
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/httping
 
 	$(INSTALL_CONF) ./root/etc/config/httping $(1)/etc/config/httping
 	$(INSTALL_BIN) ./root/etc/init.d/httping $(1)/etc/init.d/httping
@@ -45,6 +46,7 @@ define Package/luci-app-httping/install
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/controller/httping.lua $(1)/usr/lib/lua/luci/controller/httping.lua
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/model/cbi/httping/setting.lua $(1)/usr/lib/lua/luci/model/cbi/httping/setting.lua
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/view/httping/graph.htm $(1)/usr/lib/lua/luci/view/httping/graph.htm
+	$(INSTALL_DATA) ./root/www/luci-static/resources/httping/echarts.min.js $(1)/www/luci-static/resources/httping/echarts.min.js
 endef
 
 define Package/luci-app-httping/postinst
