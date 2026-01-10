@@ -64,23 +64,27 @@ check_server() {
                     if [ -n "$TARGET_IP" ]; then
                         START_MS=$(get_uptime_ms)
                         
-                        # 自动选择工具: 优先使用 ncat (对 IPv6 支持最好)
-                        if command -v ncat >/dev/null 2>&1; then
-                            NC_CMD="ncat"
-                            NC_OPTS="-z -w 2"
-                            case "$TARGET_IP" in *:*) NC_OPTS="$NC_OPTS -6" ;; esac
+                        # 使用 socat 进行探测 (比 nc 更可靠，且支持 IPv6)
+                        # 语法: socat -u OPEN:/dev/null TCP:<IP>:<PORT>,connect-timeout=2
+                        # socat 会自动处理 IPv4 (TCP4) 和 IPv6 (TCP6) 格式
+                        
+                        # 判断是 IPv6 还是 IPv4 来构造地址串
+                        if echo "$TARGET_IP" | grep -q ":"; then
+                            # IPv6: 需要用 TCP6:[IP]:Port 格式
+                            SOCAT_ADDR="TCP6:[$TARGET_IP]:$PORT"
                         else
-                            NC_CMD="nc"
-                            NC_OPTS="-z -w 2"
-                            # 只有在非 BusyBox 版本的 nc 中才尝试添加 -6
-                            if nc --help 2>&1 | grep -q "\-6"; then
-                                case "$TARGET_IP" in *:*) NC_OPTS="$NC_OPTS -6" ;; esac
-                            fi
+                            # IPv4: TCP4:IP:Port
+                            SOCAT_ADDR="TCP4:$TARGET_IP:$PORT"
                         fi
 
-                        $NC_CMD $NC_OPTS "$TARGET_IP" "$PORT" >/dev/null 2>&1
+                        socat -u OPEN:/dev/null "$SOCAT_ADDR,connect-timeout=2" >/dev/null 2>&1
                         RETCODE=$?
                         END_MS=$(get_uptime_ms)
+                        
+                        if [ $RETCODE -eq 0 ]; then
+                            DURATION=$((END_MS - START_MS))
+                        fi
+                    else
                         
                         if [ $RETCODE -eq 0 ]; then
                             DURATION=$((END_MS - START_MS))
