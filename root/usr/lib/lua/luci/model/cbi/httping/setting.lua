@@ -38,7 +38,15 @@ end
 
 ts:option(Flag, "enabled", translate("启用"))
 ts:option(Value, "name", translate("显示名称"))
-ts:option(Value, "url", translate("检测URL (http/https)"))
+
+local type = ts:option(ListValue, "type", translate("检测类型"))
+type:value("httping", "HTTPing")
+type:value("tcping", "TCPing")
+type.default = "httping"
+
+local url = ts:option(Value, "url", translate("地址/URL"))
+url.description = translate("HTTPing: http://example.com | TCPing: example.com:80")
+
 ts:option(Value, "interval", translate("检测间隔(秒)"))
 
 return m
