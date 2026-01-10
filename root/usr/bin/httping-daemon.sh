@@ -63,9 +63,14 @@ check_server() {
                     
                     if [ -n "$TARGET_IP" ]; then
                         START_MS=$(get_uptime_ms)
-                        # nc -z 扫描端口, -w 2 设置2秒超时
-                        # 对于 IPv6 地址，部分 nc 版本可能需要加 -6，但 BusyBox 通常能自动识别
-                        nc -z -w 2 "$TARGET_IP" "$PORT" >/dev/null 2>&1
+                        
+                        # 检测 IPv6 并添加 -6 参数
+                        NC_OPTS="-z -w 2"
+                        case "$TARGET_IP" in
+                            *:*) NC_OPTS="$NC_OPTS -6" ;;
+                        esac
+
+                        nc $NC_OPTS "$TARGET_IP" "$PORT" >/dev/null 2>&1
                         RETCODE=$?
                         END_MS=$(get_uptime_ms)
                         
