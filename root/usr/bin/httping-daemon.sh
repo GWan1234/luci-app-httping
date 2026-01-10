@@ -64,13 +64,21 @@ check_server() {
                     if [ -n "$TARGET_IP" ]; then
                         START_MS=$(get_uptime_ms)
                         
-                        # 检测 IPv6 并添加 -6 参数
-                        NC_OPTS="-z -w 2"
-                        case "$TARGET_IP" in
-                            *:*) NC_OPTS="$NC_OPTS -6" ;;
-                        esac
+                        # 自动选择工具: 优先使用 ncat (对 IPv6 支持最好)
+                        if command -v ncat >/dev/null 2>&1; then
+                            NC_CMD="ncat"
+                            NC_OPTS="-z -w 2"
+                            case "$TARGET_IP" in *:*) NC_OPTS="$NC_OPTS -6" ;; esac
+                        else
+                            NC_CMD="nc"
+                            NC_OPTS="-z -w 2"
+                            # 只有在非 BusyBox 版本的 nc 中才尝试添加 -6
+                            if nc --help 2>&1 | grep -q "\-6"; then
+                                case "$TARGET_IP" in *:*) NC_OPTS="$NC_OPTS -6" ;; esac
+                            fi
+                        fi
 
-                        nc $NC_OPTS "$TARGET_IP" "$PORT" >/dev/null 2>&1
+                        $NC_CMD $NC_OPTS "$TARGET_IP" "$PORT" >/dev/null 2>&1
                         RETCODE=$?
                         END_MS=$(get_uptime_ms)
                         

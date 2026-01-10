@@ -15,7 +15,7 @@ define Package/luci-app-httping
   SUBMENU:=3. Applications
   TITLE:=LuCI support for Network Latency Monitor (HTTPing)
   PKGARCH:=all
-  DEPENDS:=+luci-base +luci-lib-jsonc +curl +sqlite3-cli +netcat
+  DEPENDS:=+luci-base +luci-lib-jsonc +curl +sqlite3-cli +ncat
 endef
 
 define Package/luci-app-httping/description
