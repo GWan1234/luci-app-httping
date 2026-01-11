@@ -199,7 +199,7 @@ local function main_loop()
         if global_enabled == "1" then
             -- 遍历所有 server 节点
             uci:foreach("httping", "server", function(s)
-                check_server(s[.".name"], s)
+                check_server(s[".name"], s)
             end)
         else
             -- 如果全局禁用，稍微 sleep 长一点，或者清空状态
