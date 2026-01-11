@@ -21,7 +21,7 @@ start_service() {
     migrate_db
 
     procd_open_instance
-    procd_set_param command /usr/bin/httping-daemon.lua
+    procd_set_param command /usr/bin/lua /usr/bin/httping-daemon.lua
     procd_set_param respawn
     procd_close_instance
 }
