@@ -142,7 +142,7 @@ local function do_httping(url)
     
     if not output or output == "" then return nil end
     
-    local t_dns, t_total = output:match("([%%d%%.%%]+)%s+([%%d%%.%%]+)")
+    local t_dns, t_total = output:match("([%d%.]+)%s+([%d%.]+)")
     if t_dns and t_total then
         -- 计算 TCP + Transfer 时间 (排除 DNS)
         -- 注意：这里保持和原来 Shell 脚本一样的逻辑 (Total - DNS)
