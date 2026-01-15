@@ -316,56 +316,84 @@
     function processAndRender(rawData, preserveZoom) {
         cachedData = rawData || [];
 
-        var groupedData = {};
+        var groupedData = {};     // 存放 EMA 平滑后的线图数据
+        var rawScatterData = {};  // 存放原始数据的散点图数据 (用于背景弱化显示)
         var lossData = {};
         var serverStats = {};
 
-        var rawGrouped = {};
+        // 分组整理数据
+        var serverGroups = {};
+
         cachedData.forEach(function (item) {
-            if (!rawGrouped[item.server_name]) rawGrouped[item.server_name] = [];
-            rawGrouped[item.server_name].push(item.duration);
+            if (!serverGroups[item.server_name]) serverGroups[item.server_name] = [];
+            serverGroups[item.server_name].push(item);
 
             if (!serverStats[item.server_name]) serverStats[item.server_name] = { total: 0, loss: 0 };
             serverStats[item.server_name].total++;
             if (item.duration === null) serverStats[item.server_name].loss++;
         });
 
-        var thresholds = {};
-        if (isClippingMode) {
-            Object.keys(rawGrouped).forEach(function (name) {
-                var values = rawGrouped[name].filter(v => v !== null).sort((a, b) => a - b);
-                if (values.length > 0) {
-                    var idx = Math.floor(values.length * 0.95);
-                    thresholds[name] = values[idx];
-                } else {
-                    thresholds[name] = 9999;
-                }
-            });
-        }
+        Object.keys(serverGroups).forEach(function(serverName) {
+            var items = serverGroups[serverName];
+            groupedData[serverName] = [];
+            rawScatterData[serverName] = [];
+            lossData[serverName] = [];
+            
+            // EMA 参数配置
+            // alpha 越大，跟随原始数据越紧（平滑效果弱，滞后小）
+            // alpha 越小，曲线越平滑（抗噪能力强，滞后大）
+            var alpha = 0.25; 
+            var lastEma = null;
+            
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var ts = item.timestamp * 1000;
+                
+                if (item.duration !== null) {
+                    var val = item.duration;
+                    var finalDuration = val;
 
-        cachedData.forEach(function (item) {
-            if (!groupedData[item.server_name]) {
-                groupedData[item.server_name] = [];
-                lossData[item.server_name] = [];
-            }
+                    if (isClippingMode) {
+                        // EMA 计算逻辑
+                        if (lastEma === null) {
+                            finalDuration = val; // 第一个点直接取值
+                        } else {
+                            finalDuration = (val * alpha) + (lastEma * (1 - alpha));
+                        }
+                        lastEma = finalDuration;
+                        
+                        // 1. 存入平滑线数据 (携带原始值用于 Tooltip)
+                        groupedData[serverName].push({
+                            value: [ts, finalDuration],
+                            rawVal: val,  // 原始值用于展示
+                            isEma: true
+                        });
 
-            if (item.duration === null) {
-                lossData[item.server_name].push([item.timestamp * 1000, 0]);
-            } else {
-                var finalDuration = item.duration;
-                if (isClippingMode && thresholds[item.server_name] && finalDuration > thresholds[item.server_name]) {
-                    groupedData[item.server_name].push({
-                        value: [item.timestamp * 1000, thresholds[item.server_name]],
-                        rawVal: finalDuration
-                    });
+                        // 2. 存入背景散点数据 (仅当原始值和EMA偏差较大时显示，或者全部显示)
+                        // 这里选择全部显示，但样式上弱化
+                        rawScatterData[serverName].push([ts, val]);
+
+                    } else {
+                        // 关闭削峰/平滑模式：直接显示原始数据
+                        groupedData[serverName].push({
+                            value: [ts, val],
+                            rawVal: val,
+                            isEma: false
+                        });
+                        // 非平滑模式下，不需要额外的背景散点
+                    }
                 } else {
-                    groupedData[item.server_name].push([item.timestamp * 1000, finalDuration]);
+                    // 丢包处理：EMA 序列中断或保持？这里选择中断，重置 lastEma
+                    // 这样能反映出丢包对平滑连续性的破坏
+                    lastEma = null; 
+                    lossData[serverName].push([ts, 0]);
                 }
             }
         });
 
         renderFilterChips(serverStats);
-        updateChartDisplay(groupedData, lossData, preserveZoom);
+        // 传递 rawScatterData 给渲染函数
+        updateChartDisplay(groupedData, rawScatterData, lossData, preserveZoom);
     }
 
     function renderFilterChips(stats) {
@@ -398,10 +426,10 @@
             container.appendChild(chip);
         });
         
-        // 处理可能存在的未在配置中但有数据的旧数据（虽然少见）
+        // 处理可能存在的未在配置中但有数据的旧数据
         Object.keys(stats).forEach(function(name) {
              if (serverOrder.indexOf(name) === -1) {
-                  // ... logic to render unknown servers if needed, or just ignore
+                  // ... logic to render unknown servers if needed
              }
         });
     }
@@ -414,19 +442,17 @@
             activeServers.add(name);
             element.classList.add('active');
         }
-        // 切换服务器时，保持当前缩放状态，体验更好
         processAndRender(cachedData, true);
     }
 
     function toggleClipping() {
         var checkbox = document.getElementById('clip-peaks-check');
         isClippingMode = checkbox.checked;
-        // 切换削峰时，保持缩放
         processAndRender(cachedData, true);
     }
 
-    // 核心修改：增加 preserveZoom 参数
-    function updateChartDisplay(groupedData, lossData, preserveZoom) {
+    // 核心修改：增加 rawScatterData 参数
+    function updateChartDisplay(groupedData, rawScatterData, lossData, preserveZoom) {
         var theme = getChartTheme();
         var seriesList = [];
         var legendData = [];
@@ -434,14 +460,30 @@
 
         var isFilterMode = activeServers.size > 0;
 
-        // 【优化】按配置顺序生成图表数据
         serverOrder.forEach(function (serverName) {
-            if (!groupedData[serverName]) return; // 无数据跳过
+            if (!groupedData[serverName]) return; 
             if (isFilterMode && !activeServers.has(serverName)) return;
 
             legendData.push(serverName);
             var currentColor = colorPalette[colorIdx % colorPalette.length];
 
+            // 1. 背景原始散点 (仅在平滑模式下显示)
+            if (isClippingMode && rawScatterData[serverName]) {
+                seriesList.push({
+                    name: serverName + ' (raw)',
+                    type: 'scatter',
+                    symbolSize: 3, // 小点
+                    itemStyle: { 
+                        color: currentColor,
+                        opacity: 0.25 // 弱化显示
+                    },
+                    data: rawScatterData[serverName],
+                    silent: true, // 不响应鼠标事件，避免 Tooltip 闪烁
+                    z: 1 //由于层级低，会在线图下方
+                });
+            }
+
+            // 2. 主线图 (EMA 平滑)
             seriesList.push({
                 name: serverName,
                 type: 'line',
@@ -450,10 +492,12 @@
                 smooth: true,
                 sampling: 'lttb',
                 itemStyle: { color: currentColor },
-                lineStyle: { width: 1 },
-                data: groupedData[serverName]
+                lineStyle: { width: isClippingMode ? 2 : 1 }, // 平滑模式下线稍微加粗一点
+                data: groupedData[serverName],
+                z: 5
             });
 
+            // 3. 丢包点
             if (lossData[serverName] && lossData[serverName].length > 0) {
                 seriesList.push({
                     name: serverName + ' (丢包)',
@@ -482,7 +526,6 @@
             // silent
         }
 
-        // 【关键逻辑】获取当前缩放状态
         var startZoom = 0;
         var endZoom = 100;
         if (preserveZoom && myChart) {
@@ -503,19 +546,20 @@
                     var html = params[0].axisValueLabel + '<br/>';
                     params.forEach(item => {
                         if (item.seriesType === 'line') {
-                            var val, displayVal;
+                            var val, rawVal, displayHtml;
+                            val = item.data.value[1];
 
-                            if (typeof item.data === 'object' && item.data.rawVal !== undefined) {
-                                val = item.data.value[1];
-                                displayVal = val.toFixed(1) + ' ms <span style="color:#aaa;font-size:11px;">(已削峰)</span>';
+                            if (item.data.isEma) {
+                                rawVal = item.data.rawVal;
+                                // 显示格式：EMA值 (原始: Raw值)
+                                displayHtml = `<b>${val.toFixed(1)} ms</b> <span style="color:#aaa;font-size:11px;">(EMA平滑, 原始: ${rawVal.toFixed(1)})</span>`;
                             } else {
-                                val = item.value[1];
-                                displayVal = val !== null ? val.toFixed(1) + ' ms' : '<span style="color:#ff4d4f;font-weight:bold;">丢包</span>';
+                                displayHtml = `<b>${val.toFixed(1)} ms</b>`;
                             }
 
                             var colorSpan = `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>`;
-                            html += `${colorSpan}${item.seriesName}: ${displayVal}<br/>`;
-                        } else if (item.seriesType === 'scatter') {
+                            html += `${colorSpan}${item.seriesName}: ${displayHtml}<br/>`;
+                        } else if (item.seriesType === 'scatter' && item.seriesName.indexOf('(丢包)') > -1) {
                             var serverName = item.seriesName.replace(' (丢包)', '');
                             var time = item.axisValueLabel;
                             var colorSpan = `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>`;
