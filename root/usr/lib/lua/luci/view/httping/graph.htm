@@ -456,16 +456,17 @@
         var theme = getChartTheme();
         var seriesList = [];
         var legendData = [];
-        var colorIdx = 0;
-
         var isFilterMode = activeServers.size > 0;
 
-        serverOrder.forEach(function (serverName) {
+        serverOrder.forEach(function (serverName, idx) {
             if (!groupedData[serverName]) return; 
+
+            // 使用 idx (服务器在 serverOrder 中的固定位置) 来决定颜色
+            var currentColor = colorPalette[idx % colorPalette.length];
+
             if (isFilterMode && !activeServers.has(serverName)) return;
 
             legendData.push(serverName);
-            var currentColor = colorPalette[colorIdx % colorPalette.length];
 
             // 1. 背景原始散点 (仅在平滑模式下显示)
             if (isClippingMode && rawScatterData[serverName]) {
