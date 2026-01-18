@@ -343,56 +343,100 @@
             rawScatterData[serverName] = [];
             lossData[serverName] = [];
             
-            // EMA 参数配置
-            // alpha 越大，跟随原始数据越紧（平滑效果弱，滞后小）
-            // alpha 越小，曲线越平滑（抗噪能力强，滞后大）
-            var alpha = 0.25; 
-            var lastEma = null;
+            // ---------------------------------------------------------
+            // 步骤1：数据预处理（提取有效数值序列，方便滤波）
+            // ---------------------------------------------------------
+            // 为了进行移动中位数滤波，我们需要一个连续的数值数组
+            // 但数据中可能包含 NULL (丢包)，我们需要处理这种情况
+            // 策略：遇到丢包时，打断滤波序列
+            
+            var segments = [];
+            var currentSegment = [];
             
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
                 var ts = item.timestamp * 1000;
                 
                 if (item.duration !== null) {
-                    var val = item.duration;
-                    var finalDuration = val;
-
-                    if (isClippingMode) {
-                        // EMA 计算逻辑
-                        if (lastEma === null) {
-                            finalDuration = val; // 第一个点直接取值
-                        } else {
-                            finalDuration = (val * alpha) + (lastEma * (1 - alpha));
-                        }
-                        lastEma = finalDuration;
-                        
-                        // 1. 存入平滑线数据 (携带原始值用于 Tooltip)
-                        groupedData[serverName].push({
-                            value: [ts, finalDuration],
-                            rawVal: val,  // 原始值用于展示
-                            isEma: true
-                        });
-
-                        // 2. 存入背景散点数据 (仅当原始值和EMA偏差较大时显示，或者全部显示)
-                        // 这里选择全部显示，但样式上弱化
-                        rawScatterData[serverName].push([ts, val]);
-
-                    } else {
-                        // 关闭削峰/平滑模式：直接显示原始数据
-                        groupedData[serverName].push({
-                            value: [ts, val],
-                            rawVal: val,
-                            isEma: false
-                        });
-                        // 非平滑模式下，不需要额外的背景散点
-                    }
+                    currentSegment.push({
+                        ts: ts,
+                        val: item.duration,
+                        origIndex: i
+                    });
                 } else {
-                    // 丢包处理：EMA 序列中断或保持？这里选择中断，重置 lastEma
-                    // 这样能反映出丢包对平滑连续性的破坏
-                    lastEma = null; 
+                    // 遇到丢包，记录丢包点
                     lossData[serverName].push([ts, 0]);
+                    
+                    // 结束当前段
+                    if (currentSegment.length > 0) {
+                        segments.push(currentSegment);
+                        currentSegment = [];
+                    }
                 }
             }
+            if (currentSegment.length > 0) segments.push(currentSegment);
+            
+            // ---------------------------------------------------------
+            // 步骤2 & 3：对每一段进行 [中位数滤波] -> [EMA平滑]
+            // ---------------------------------------------------------
+            // EMA 参数配置
+            var alpha = 0.25; 
+            
+            segments.forEach(function(segment) {
+                var segmentLen = segment.length;
+                if (segmentLen === 0) return;
+                
+                var lastEma = null;
+                
+                for (var k = 0; k < segmentLen; k++) {
+                    var rawVal = segment[k].val;
+                    var ts = segment[k].ts;
+                    var processedVal = rawVal;
+                    
+                    if (isClippingMode) {
+                        // === A. 移动中位数去噪 (5点窗口) ===
+                        // 取前后各2点，共5点求中位数
+                        var windowVals = [];
+                        for (var w = -2; w <= 2; w++) {
+                            var idx = k + w;
+                            if (idx >= 0 && idx < segmentLen) {
+                                windowVals.push(segment[idx].val);
+                            }
+                        }
+                        
+                        // 排序取中位数
+                        windowVals.sort(function(a, b) { return a - b; });
+                        var medianVal = windowVals[Math.floor(windowVals.length / 2)];
+                        
+                        // === B. EMA 平滑 ===
+                        // 对 "去噪后的值(medianVal)" 进行平滑
+                        if (lastEma === null) {
+                            processedVal = medianVal;
+                        } else {
+                            processedVal = (medianVal * alpha) + (lastEma * (1 - alpha));
+                        }
+                        lastEma = processedVal;
+                        
+                        // 存入平滑线数据
+                        groupedData[serverName].push({
+                            value: [ts, processedVal],
+                            rawVal: rawVal,  // 原始值用于 Tooltip
+                            isEma: true
+                        });
+                        
+                        // 存入背景散点 (显示原始数据)
+                        rawScatterData[serverName].push([ts, rawVal]);
+                        
+                    } else {
+                        // 非平滑模式：直接使用原始值
+                        groupedData[serverName].push({
+                            value: [ts, rawVal],
+                            rawVal: rawVal,
+                            isEma: false
+                        });
+                    }
+                }
+            });
         });
 
         renderFilterChips(serverStats);
